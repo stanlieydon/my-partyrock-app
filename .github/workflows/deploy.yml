@@ -59,6 +59,15 @@ jobs:
             --region ap-southeast-1 \
             --no-fail-on-empty-changeset
 
+      - name: Update Lambda function code
+        run: |
+          FUNCTION_NAME="smart-ai-finance-advisor-monthly-savings"
+          aws lambda update-function-code \
+            --function-name $FUNCTION_NAME \
+            --s3-bucket ${{ secrets.SAM_DEPLOY_BUCKET }} \
+            --s3-key lambda-code.zip \
+            --region ap-southeast-1
+
       - name: Get Stack Outputs
         id: outputs
         run: |

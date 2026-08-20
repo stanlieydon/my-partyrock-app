@@ -11,15 +11,6 @@ Parameters:
       - dev
       - prod
 
-Globals:
-  Function:
-    Timeout: 60
-    MemorySize: 512
-    Runtime: python3.12
-    Environment:
-      Variables:
-        ENVIRONMENT: !Ref Environment
-
 Resources:
   # IAM Role for Lambda functions
   AppBedrockRole:
@@ -59,8 +50,10 @@ Resources:
       Timeout: 60
       MemorySize: 512
       Code:
-        S3Bucket: !Sub '${S3CodeBucket}'
-        S3Key: lambda-code.zip
+        ZipFile: |
+          # Placeholder - will be replaced by workflow
+          def app(event, context):
+              return {'statusCode': 200, 'body': 'Lambda function deployed'}
       Environment:
         Variables:
           ENVIRONMENT: !Ref Environment
@@ -87,14 +80,6 @@ Resources:
       FunctionName: !Ref MonthlySavingsSummaryFunction
       Action: lambda:InvokeFunctionUrl
       Principal: '*'
-
-  # S3 Bucket for Lambda Code
-  S3CodeBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub 'lambda-code-${AWS::AccountId}-${AWS::Region}'
-      VersioningConfiguration:
-        Status: Enabled
 
   # S3 Bucket for Frontend
   FrontendBucket:
