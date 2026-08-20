@@ -44,43 +44,13 @@ Resources:
                   'body': 'Lambda deployed'
               }
 
-  # Lambda Function URL
-  FinanceAdvisorFunctionUrl:
-    Type: AWS::Lambda::Url
-    Properties:
-      TargetFunctionArn: !GetAtt FinanceAdvisorFunction.Arn
-      AuthType: NONE
-      Cors:
-        AllowOrigins:
-          - '*'
-        AllowMethods:
-          - POST
-          - OPTIONS
-        AllowHeaders:
-          - Content-Type
-
-  # Lambda Permission for URL
-  FinanceAdvisorFunctionUrlPermission:
-    Type: AWS::Lambda::Permission
-    Properties:
-      FunctionName: !Ref FinanceAdvisorFunction
-      Principal: '*'
-      Action: lambda:InvokeFunctionUrl
-      FunctionUrlAuthType: NONE
-
   # Frontend S3 Bucket
   FrontendBucket:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Sub 'smart-ai-advisor-${AWS::AccountId}'
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: false
-        BlockPublicPolicy: false
-        IgnorePublicAcls: false
-        RestrictPublicBuckets: false
       WebsiteConfiguration:
         IndexDocument: index.html
-        ErrorDocument: index.html
 
   # S3 Public Read Policy
   BucketPolicy:
@@ -96,14 +66,10 @@ Resources:
             Resource: !Sub '${FrontendBucket.Arn}/*'
 
 Outputs:
-  LambdaUrl:
-    Value: !GetAtt FinanceAdvisorFunctionUrl.FunctionUrl
-    Description: Lambda Function URL
-
-  WebsiteUrl:
-    Value: !GetAtt FrontendBucket.WebsiteURL
-    Description: Frontend Website URL
-
   BucketName:
     Value: !Ref FrontendBucket
     Description: S3 Bucket Name
+
+  WebsiteUrl:
+    Value: !Sub 'http://${FrontendBucket.DomainName}'
+    Description: Frontend Website URL
