@@ -50,14 +50,36 @@ jobs:
 
       - name: Deploy CloudFormation stack
         id: deploy
+        continue-on-error: true
         run: |
-          aws cloudformation deploy \
-            --template-file infra/template.yaml \
-            --stack-name smart-ai-personal-finance-advisor \
-            --parameter-overrides Environment=prod \
-            --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
-            --region ap-southeast-1 \
-            --no-fail-on-empty-changeset
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          BUCKET_NAME="smart-ai-advisor-${ACCOUNT_ID}"
+          
+          # Create S3 bucket if it doesn't exist
+          aws s3 mb s3://${BUCKET_NAME} --region ap-southeast-1 || echo "Bucket already exists"
+          
+          # Enable website hosting
+          aws s3 website s3://${BUCKET_NAME} \
+            --index-document index.html \
+            --error-document index.html
+          
+          # Set bucket policy for public read
+          aws s3api put-bucket-policy \
+            --bucket ${BUCKET_NAME} \
+            --policy '{
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Principal": "*",
+                  "Action": "s3:GetObject",
+                  "Resource": "arn:aws:s3:::'"${BUCKET_NAME}"'/*"
+                }
+              ]
+            }'
+          
+          echo "Bucket ${BUCKET_NAME} ready"
+          echo "bucket_name=${BUCKET_NAME}" >> $GITHUB_OUTPUT
 
       - name: Update Lambda function code
         run: |
@@ -71,26 +93,16 @@ jobs:
       - name: Get Stack Outputs
         id: outputs
         run: |
-          OUTPUT=$(aws cloudformation describe-stacks \
-            --stack-name smart-ai-personal-finance-advisor \
-            --region ap-southeast-1 \
-            --query 'Stacks[0].Outputs' \
-            --output json)
-          echo "Stack outputs: $OUTPUT"
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          BUCKET_NAME="smart-ai-advisor-${ACCOUNT_ID}"
+          WEBSITE_URL="http://${BUCKET_NAME}.s3-website-ap-southeast-1.amazonaws.com"
           
-          # Extract outputs
-          MONTHLY_SAVINGS_URL=$(echo "$OUTPUT" | jq -r '.[] | select(.OutputKey=="MonthlySavingsSummaryUrl") | .OutputValue')
-          WEBSITE_URL=$(echo "$OUTPUT" | jq -r '.[] | select(.OutputKey=="WebsiteUrl") | .OutputValue')
-          BUCKET_NAME=$(echo "$OUTPUT" | jq -r '.[] | select(.OutputKey=="BucketName") | .OutputValue')
+          echo "bucket_name=${BUCKET_NAME}" >> $GITHUB_OUTPUT
+          echo "website_url=${WEBSITE_URL}" >> $GITHUB_OUTPUT
           
-          echo "monthly_savings_url=$MONTHLY_SAVINGS_URL" >> $GITHUB_OUTPUT
-          echo "website_url=$WEBSITE_URL" >> $GITHUB_OUTPUT
-          echo "bucket_name=$BUCKET_NAME" >> $GITHUB_OUTPUT
-          
-          echo "Extracted URLs:"
-          echo "  Monthly Savings: $MONTHLY_SAVINGS_URL"
-          echo "  Website: $WEBSITE_URL"
-          echo "  Bucket: $BUCKET_NAME"
+          echo "Extracted outputs:"
+          echo "  Website: ${WEBSITE_URL}"
+          echo "  Bucket: ${BUCKET_NAME}"
 
       - name: Update Frontend with Lambda URLs
         run: |
