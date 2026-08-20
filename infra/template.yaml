@@ -1,19 +1,9 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Transform: AWS::Serverless-2016-10-31
-
-Description: Smart AI Personal Finance Advisor - Serverless Application
-
-Parameters:
-  Environment:
-    Type: String
-    Default: prod
-    AllowedValues:
-      - dev
-      - prod
+Description: Smart AI Personal Finance Advisor
 
 Resources:
-  # IAM Role for Lambda functions
-  AppBedrockRole:
+  # IAM Role for Lambda
+  LambdaRole:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
@@ -26,7 +16,7 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       Policies:
-        - PolicyName: BedrockInvokePolicy
+        - PolicyName: BedrockAccess
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
@@ -34,34 +24,31 @@ Resources:
                 Action:
                   - bedrock:InvokeModel
                   - bedrock:InvokeModelWithResponseStream
-                Resource:
-                  - !Sub 'arn:aws:bedrock:*:${AWS::AccountId}:inference-profile/global.anthropic.claude-haiku-4-5-20251001-v1:0-20260217-v1:0'
-                  - !Sub 'arn:aws:bedrock:*::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0-20260217-v1:0'
-                  - 'arn:aws:bedrock:::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0-20260217-v1:0'
+                Resource: '*'
 
-  # Monthly Savings Summary Lambda Function
-  MonthlySavingsSummaryFunction:
+  # Lambda Function
+  FinanceAdvisorFunction:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: smart-ai-finance-advisor-monthly-savings
+      FunctionName: smart-ai-finance-advisor
       Runtime: python3.12
-      Role: !GetAtt AppBedrockRole.Arn
+      Role: !GetAtt LambdaRole.Arn
       Handler: index.handler
       Timeout: 60
       MemorySize: 512
       Code:
         ZipFile: |
           def handler(event, context):
-              return {'statusCode': 200, 'body': 'Lambda placeholder'}
-      Environment:
-        Variables:
-          ENVIRONMENT: !Ref Environment
+              return {
+                  'statusCode': 200,
+                  'body': 'Lambda deployed'
+              }
 
   # Lambda Function URL
-  MonthlySavingsSummaryFunctionUrl:
+  FinanceAdvisorFunctionUrl:
     Type: AWS::Lambda::Url
     Properties:
-      TargetFunctionArn: !GetAtt MonthlySavingsSummaryFunction.Arn
+      TargetFunctionArn: !GetAtt FinanceAdvisorFunction.Arn
       AuthType: NONE
       Cors:
         AllowOrigins:
@@ -72,19 +59,20 @@ Resources:
         AllowHeaders:
           - Content-Type
 
-  # Permission for Lambda URL
-  MonthlySavingsSummaryFunctionUrlPermission:
+  # Lambda Permission for URL
+  FinanceAdvisorFunctionUrlPermission:
     Type: AWS::Lambda::Permission
     Properties:
-      FunctionName: !Ref MonthlySavingsSummaryFunction
-      Action: lambda:InvokeFunctionUrl
+      FunctionName: !Ref FinanceAdvisorFunction
       Principal: '*'
+      Action: lambda:InvokeFunctionUrl
+      FunctionUrlAuthType: NONE
 
-  # S3 Bucket for Frontend
+  # Frontend S3 Bucket
   FrontendBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'smart-ai-finance-advisor-${AWS::AccountId}'
+      BucketName: !Sub 'smart-ai-advisor-${AWS::AccountId}'
       PublicAccessBlockConfiguration:
         BlockPublicAcls: false
         BlockPublicPolicy: false
@@ -93,38 +81,29 @@ Resources:
       WebsiteConfiguration:
         IndexDocument: index.html
         ErrorDocument: index.html
-      VersioningConfiguration:
-        Status: Enabled
 
-  # S3 Bucket Policy for public read access
-  FrontendBucketPolicy:
+  # S3 Public Read Policy
+  BucketPolicy:
     Type: AWS::S3::BucketPolicy
     Properties:
       Bucket: !Ref FrontendBucket
       PolicyText:
         Version: '2012-10-17'
         Statement:
-          - Sid: PublicReadGetObject
-            Effect: Allow
+          - Effect: Allow
             Principal: '*'
             Action: s3:GetObject
             Resource: !Sub '${FrontendBucket.Arn}/*'
 
 Outputs:
-  MonthlySavingsSummaryUrl:
-    Description: Monthly Savings Summary Lambda Function URL
-    Value: !GetAtt MonthlySavingsSummaryFunctionUrl.FunctionUrl
-    Export:
-      Name: !Sub '${AWS::StackName}-MonthlySavingsSummaryUrl'
+  LambdaUrl:
+    Value: !GetAtt FinanceAdvisorFunctionUrl.FunctionUrl
+    Description: Lambda Function URL
 
   WebsiteUrl:
-    Description: Frontend S3 Website URL
     Value: !GetAtt FrontendBucket.WebsiteURL
-    Export:
-      Name: !Sub '${AWS::StackName}-WebsiteUrl'
+    Description: Frontend Website URL
 
   BucketName:
-    Description: Frontend S3 Bucket Name
     Value: !Ref FrontendBucket
-    Export:
-      Name: !Sub '${AWS::StackName}-BucketName'
+    Description: S3 Bucket Name
