@@ -46,14 +46,13 @@ Resources:
       FunctionName: smart-ai-finance-advisor-monthly-savings
       Runtime: python3.12
       Role: !GetAtt AppBedrockRole.Arn
-      Handler: lambda_handler.app
+      Handler: index.handler
       Timeout: 60
       MemorySize: 512
       Code:
         ZipFile: |
-          # Placeholder - will be replaced by workflow
-          def app(event, context):
-              return {'statusCode': 200, 'body': 'Lambda function deployed'}
+          def handler(event, context):
+              return {'statusCode': 200, 'body': 'Lambda placeholder'}
       Environment:
         Variables:
           ENVIRONMENT: !Ref Environment
