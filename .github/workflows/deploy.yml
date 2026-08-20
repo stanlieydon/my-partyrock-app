@@ -30,10 +30,14 @@ jobs:
 
       - name: Build Lambda package
         run: |
-          cd backend/monthly_savings_summary
+          mkdir -p lambda-package
+          cp backend/monthly_savings_summary/lambda_handler.py lambda-package/
+          cp backend/monthly_savings_summary/requirements.txt lambda-package/
+          cd lambda-package
           pip install -r requirements.txt -t .
-          zip -r ../../lambda-code.zip . -x "*.git*"
-          cd ../..
+          zip -r ../lambda-code.zip .
+          cd ..
+          ls -la lambda-code.zip
 
       - name: Upload Lambda code to S3
         run: |
