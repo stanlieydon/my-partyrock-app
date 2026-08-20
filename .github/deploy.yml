@@ -1,0 +1,119 @@
+name: Deploy Smart AI Finance Advisor
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          node-version: '24'
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-southeast-1
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Build Lambda package
+        run: |
+          mkdir -p lambda-package
+          cp backend/monthly_savings_summary/lambda_handler.py lambda-package/
+          cp backend/monthly_savings_summary/requirements.txt lambda-package/
+          cd lambda-package
+          pip install -r requirements.txt -t .
+          zip -r ../lambda-code.zip .
+          cd ..
+          ls -la lambda-code.zip
+
+      - name: Upload Lambda code to S3
+        run: |
+          aws s3 cp lambda-code.zip s3://${{ secrets.SAM_DEPLOY_BUCKET }}/lambda-code.zip
+
+      - name: Setup AWS SAM CLI
+        uses: aws-actions/setup-sam@v2
+
+      - name: Deploy CloudFormation stack
+        id: deploy
+        run: |
+          aws cloudformation deploy \
+            --template-file infra/template.yaml \
+            --stack-name smart-ai-personal-finance-advisor \
+            --parameter-overrides Environment=prod \
+            --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
+            --region ap-southeast-1 \
+            --no-fail-on-empty-changeset
+
+      - name: Get Stack Outputs
+        id: outputs
+        run: |
+          OUTPUT=$(aws cloudformation describe-stacks \
+            --stack-name smart-ai-personal-finance-advisor \
+            --region ap-southeast-1 \
+            --query 'Stacks[0].Outputs' \
+            --output json)
+          echo "Stack outputs: $OUTPUT"
+          
+          # Extract outputs
+          MONTHLY_SAVINGS_URL=$(echo "$OUTPUT" | jq -r '.[] | select(.OutputKey=="MonthlySavingsSummaryUrl") | .OutputValue')
+          WEBSITE_URL=$(echo "$OUTPUT" | jq -r '.[] | select(.OutputKey=="WebsiteUrl") | .OutputValue')
+          BUCKET_NAME=$(echo "$OUTPUT" | jq -r '.[] | select(.OutputKey=="BucketName") | .OutputValue')
+          
+          echo "monthly_savings_url=$MONTHLY_SAVINGS_URL" >> $GITHUB_OUTPUT
+          echo "website_url=$WEBSITE_URL" >> $GITHUB_OUTPUT
+          echo "bucket_name=$BUCKET_NAME" >> $GITHUB_OUTPUT
+          
+          echo "Extracted URLs:"
+          echo "  Monthly Savings: $MONTHLY_SAVINGS_URL"
+          echo "  Website: $WEBSITE_URL"
+          echo "  Bucket: $BUCKET_NAME"
+
+      - name: Update Frontend with Lambda URLs
+        run: |
+          # Copy frontend to temp directory
+          cp -r frontend frontend_build
+          
+          # Replace placeholder URLs in index.html
+          sed -i "s|__URL_MONTHLY_SAVINGS_SUMMARY__|${{ steps.outputs.outputs.monthly_savings_url }}|g" frontend_build/index.html
+          
+          echo "Updated frontend URLs:"
+          grep "const STREAM_URLS" frontend_build/index.html -A 2
+
+      - name: Deploy Frontend to S3
+        run: |
+          aws s3 sync frontend_build/ \
+            s3://${{ steps.outputs.outputs.bucket_name }}/ \
+            --delete \
+            --cache-control "max-age=0,no-cache,no-store,must-revalidate"
+
+      - name: Invalidate CloudFront (if applicable)
+        continue-on-error: true
+        run: |
+          # If you set up CloudFront distribution later, add invalidation here
+          echo "CloudFront invalidation skipped (not configured yet)"
+
+      - name: Deployment Summary
+        run: |
+          echo "✅ Deployment Complete!"
+          echo ""
+          echo "🌐 Website URL: ${{ steps.outputs.outputs.website_url }}"
+          echo "⚡ Lambda Endpoint: ${{ steps.outputs.outputs.monthly_savings_url }}"
+          echo "📦 S3 Bucket: ${{ steps.outputs.outputs.bucket_name }}"
+          echo ""
+          echo "Next steps:"
+          echo "1. Visit: ${{ steps.outputs.outputs.website_url }}"
+          echo "2. Fill in your financial information"
+          echo "3. Click 'Run All' to get personalized advice"
