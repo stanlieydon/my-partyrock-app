@@ -1,0 +1,32 @@
+# SAM build
+.aws-sam/
+build/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+.env
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+*.zip
+.coverage
+htmlcov/
+
+# Frontend build
+frontend_build/
+node_modules/

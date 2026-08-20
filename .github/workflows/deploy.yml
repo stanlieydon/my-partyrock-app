@@ -31,8 +31,10 @@ jobs:
       - name: Build Lambda package
         run: |
           mkdir -p lambda-package
-          cp backend/monthly_savings_summary/lambda_handler.py lambda-package/
-          cp backend/monthly_savings_summary/requirements.txt lambda-package/
+          find . -name "lambda_handler.py" -type f
+          find . -name "requirements.txt" -type f
+          cp backend/lambda/monthly_savings_summary/lambda_handler.py lambda-package/
+          cp backend/lambda/monthly_savings_summary/requirements.txt lambda-package/
           cd lambda-package
           pip install -r requirements.txt -t .
           zip -r ../lambda-code.zip .
