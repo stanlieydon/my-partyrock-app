@@ -14,7 +14,7 @@ Parameters:
 Globals:
   Function:
     Timeout: 60
-    MemorySize: 256
+    MemorySize: 512
     Runtime: python3.12
     Environment:
       Variables:
@@ -44,30 +44,57 @@ Resources:
                   - bedrock:InvokeModel
                   - bedrock:InvokeModelWithResponseStream
                 Resource:
-                  - !Sub 'arn:aws:bedrock:ap-southeast-1:${AWS::AccountId}:inference-profile/global.anthropic.claude-haiku-4-5-20251001-v1:0-20260217-v1:0'
-                  - !Sub 'arn:aws:bedrock:ap-southeast-1::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0-20260217-v1:0'
-                  - !Sub 'arn:aws:bedrock:::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0-20260217-v1:0'
+                  - !Sub 'arn:aws:bedrock:*:${AWS::AccountId}:inference-profile/global.anthropic.claude-haiku-4-5-20251001-v1:0-20260217-v1:0'
+                  - !Sub 'arn:aws:bedrock:*::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0-20260217-v1:0'
+                  - 'arn:aws:bedrock:::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0-20260217-v1:0'
 
   # Monthly Savings Summary Lambda Function
   MonthlySavingsSummaryFunction:
-    Type: AWS::Serverless::Function
+    Type: AWS::Lambda::Function
     Properties:
       FunctionName: smart-ai-finance-advisor-monthly-savings
-      CodeUri: ../backend/monthly_savings_summary/
-      Handler: run.sh
+      Runtime: python3.12
       Role: !GetAtt AppBedrockRole.Arn
+      Handler: lambda_handler.app
       Timeout: 60
-      MemorySize: 256
-      Layers:
-        - arn:aws:lambda:ap-southeast-1:753240598075:layer:LambdaAdapterLayerX86:27
+      MemorySize: 512
+      Code:
+        S3Bucket: !Sub '${S3CodeBucket}'
+        S3Key: lambda-code.zip
       Environment:
         Variables:
-          AWS_LAMBDA_EXEC_WRAPPER: /opt/bootstrap
-          AWS_LWA_INVOKE_MODE: response_stream
-          PORT: '8080'
-      FunctionUrlConfig:
-        AuthType: NONE
-        InvokeMode: RESPONSE_STREAM
+          ENVIRONMENT: !Ref Environment
+
+  # Lambda Function URL
+  MonthlySavingsSummaryFunctionUrl:
+    Type: AWS::Lambda::Url
+    Properties:
+      TargetFunctionArn: !GetAtt MonthlySavingsSummaryFunction.Arn
+      AuthType: NONE
+      Cors:
+        AllowOrigins:
+          - '*'
+        AllowMethods:
+          - POST
+          - OPTIONS
+        AllowHeaders:
+          - Content-Type
+
+  # Permission for Lambda URL
+  MonthlySavingsSummaryFunctionUrlPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref MonthlySavingsSummaryFunction
+      Action: lambda:InvokeFunctionUrl
+      Principal: '*'
+
+  # S3 Bucket for Lambda Code
+  S3CodeBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'lambda-code-${AWS::AccountId}-${AWS::Region}'
+      VersioningConfiguration:
+        Status: Enabled
 
   # S3 Bucket for Frontend
   FrontendBucket:
